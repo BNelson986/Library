@@ -1,8 +1,6 @@
 import random
 import json
 
-
-
 inputFile = "/home/bryannelson/Downloads/ol_dump_editions_2023-03-31.txt"
 outputFile = "shortList.txt"
 lines = []
@@ -15,9 +13,9 @@ fileOut = open(outputFile, 'a')
 with open(inputFile, mode='r') as fileIn:
     #   Process 44131073 lines one by one
     for line in fileIn:
-       
+
         line = line[line.find('{'):]
-        
+
         #   Verify if no isbn is present, skip entry
         if 'isbn_10' not in line and 'isbn_13' not in line:
             continue
@@ -45,10 +43,5 @@ with open(inputFile, mode='r') as fileIn:
     items += num_lines
     print(f"Roughly {items} Copied")
 
-
-
 fileOut.close()
 print("Finished!")
-
-
-
