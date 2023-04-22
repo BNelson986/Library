@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import authorData
 
+
 #   Define a function to process each book
 def process_book(data):
     # Initialize blank lists for each book
@@ -17,16 +18,16 @@ def process_book(data):
     isbn10 = ""
 
     title = data["title"]
-   
+
     if "isbn_13" in data:
         isbn13 = data["isbn_13"]
     if "isbn_10" in data:
         isbn10 = data["isbn_10"]
     #   Add author data if it is available
     if "authors" in data:
-        authorKey:str = data["authors"][0]["key"]
-        splitKey = authorKey.split('/')
-        author = authorHash.find(splitKey[2])
+        author_key: str = data["authors"][0]["key"]
+        split_key = author_key.split('/')
+        author = authorHash.find(split_key[2])
     #   Add data for publishers if it exists
     if "publishers" in data:
         for publisher in data["publishers"]:
@@ -51,8 +52,9 @@ def process_book(data):
             "price": price,
             "inventory": inventory,
         })
-                    
-def hashAuthors(author:list):
+
+
+def hash_authors(author: list):
     key = author[0]
     name = author[1]
 
@@ -73,15 +75,13 @@ entries = []
 #   Store authors data for multithreading
 authors = []
 
-
-
-authorHash = authorData.hashTable()
+authorHash = authorData.HashTable()
 
 #   Read all lines of authors
 print("Start storing")
 with open("authorsSimple.txt", 'r') as file:
     for author in file:
-        line:str = author.replace('\n', '')
+        line: str = author.replace('\n', '')
         line = line.split('/')
         if len(line) > 1:
             name = line[1].replace('\n', '')
@@ -93,7 +93,7 @@ print("Finished storing")
 
 print("Start hashing")
 with ThreadPoolExecutor(max_workers=8) as executor:
-    future_entry = {executor.submit(hashAuthors, author): author for author in authors} 
+    future_entry = {executor.submit(hash_authors, author): author for author in authors}
 print("Finished hashing")
 
 print("Start book processing")
@@ -102,7 +102,7 @@ with open('shortList.txt', 'r') as file:
     books = [json.loads(line[line.find('{'):]) for line in file]
 
 with ThreadPoolExecutor(max_workers=8) as executor:
-    future_entry = {executor.submit(process_book, book): book for book in books} 
+    future_entry = {executor.submit(process_book, book): book for book in books}
 print("Finished book processing")
 
 insertion = collection.insert_many(entries)
