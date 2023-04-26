@@ -1,6 +1,5 @@
 import json
 import random
-import requests
 from pymongo import MongoClient
 from concurrent.futures import ThreadPoolExecutor
 
@@ -53,6 +52,9 @@ def process_book(data):
             "inventory": inventory,
         })
 
+    if len(entries) % 5000 == 0:
+        completion += 6.67
+        print(f"{completion}% finished")
 
 def hash_authors(author: list):
     key = author[0]
@@ -75,7 +77,7 @@ entries = []
 #   Store authors data for multithreading
 authors = []
 
-authorHash = authorData.HashTable()
+authorHash = authorData.HashTable(75000000)
 
 #   Read all lines of authors
 print("Start storing")
@@ -98,7 +100,7 @@ print("Finished hashing")
 
 print("Start book processing")
 # Load book data from file
-with open('shortList.txt', 'r') as file:
+with open('shortListNew.txt', 'r') as file:
     books = [json.loads(line[line.find('{'):]) for line in file]
 
 with ThreadPoolExecutor(max_workers=8) as executor:
