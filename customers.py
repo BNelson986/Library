@@ -2,8 +2,10 @@ from faker import Faker
 import faker.providers.address.en
 import random
 import uszipcode
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 import time
+import bson
 
 import authorData
 
@@ -34,7 +36,7 @@ def make_address():
         place = zipCache.find(result)
         city = place[0]
         state = place[1]
-        address = {'street': street_address, 'city': city, 'state': state, 'zipcode': zip}
+        address = {'street': street_address, 'city': city, 'state': state, 'zipcode': result}
         return address
     else:
         make_address()
@@ -42,8 +44,8 @@ def make_address():
 
 '''
     RULES FOR CHECKED BOOKS:
-    -   Max of 10 checked books per customer
-    -   Limit of 1 copy of each book per customer
+    -   Max of 5 checked books per customer
+    -   Limit of 2 copies of each book per customer
 
     PROCESS TO GENERATE CHECKED BOOKS:
     -   Randomly generate index from list of books 
@@ -51,9 +53,8 @@ def make_address():
 
 
 #   Used to generate the checked out books, update inventory, and create total cost per order
-def makeOrder(inventory, count):
+def makeOrder(inventory, count, usedBooks):
     cost = float()
-    idList = list()
     isbnList = list()
 
     #   Generate random number of books to check out
@@ -64,19 +65,20 @@ def makeOrder(inventory, count):
 
     #   Loop through selected_books and process
     for book in selected_books:
+        if book['inventory'] == 0:
+            continue
         qty = random.randint(1, min(2, book['inventory']))
-        cost += book['price'] * qty
-        idList.append(book['_id'])
-        isbnList.append(str(book['isbn_13'] or book['isbn_10']))
+        if book['_id'] in usedBooks:
+            usedBooks[book['_id']] += qty
+        else:
+            usedBooks[book['_id']] = qty
+            
         book['inventory'] -= qty
+        cost += book['price'] * qty
+        isbnList.append(str(book['isbn_13'] or book['isbn_10']))
 
     order_individual = {'isbn': isbnList}
     orders_dict = {'books': order_individual, 'cost': round(cost, 2)}
-
-    #   Update query to decrement inventory count by qty 
-    update_query = {'$inc': {'inventory': -qty}}
-
-    result = inventoryCollection.update_many({'_id': {'$in': idList}}, update_query)
 
     return orders_dict
 
@@ -90,7 +92,7 @@ def create_customer(inventory, objectCount):
 
     address = make_address()
 
-    order = makeOrder(inventory, objectCount)
+    order = makeOrder(inventory, objectCount, usedBooks)
 
     customer = {'name': name, 'email': email, 'address': address, 'order': order}
 
@@ -122,6 +124,8 @@ customers = list()
 
 futures = []
 
+usedBooks = {}
+
 #   Cache to store retrieved zipcodes
 zipCache = authorData.HashTable(700)
 keys = set()
@@ -146,20 +150,29 @@ for i in range(100):
         zipCache.insert(zip, place)
         keys.add(zip)
 
+perCompl = 0
+
 with ThreadPoolExecutor(max_workers=8) as executor:
     #   Generate random number of orders for each person
-    for i in range(100000):
+    for i in range(20000):
         future = executor.submit(create_customer, inventory, objectCount)
         futures.append(future)
     #   Collect all results from the futures
-    for future in futures:
+    for i, future in enumerate(as_completed(futures)):
         customers.append(future.result())
+        if (i + 1) % 2000 == 0:
+            perCompl += 10
+            print(f"{perCompl}% completed")
 
 et = time.time()
 
 print("Runtime:" + str(et-st))
 
-print("Entry time:" + str((et-st)/100000))
+print("Entry time:" + str((et-st)/20000))
 
+book_ids = list(usedBooks.keys())
+book_qtys = list(usedBooks.values())
+
+inventoryCollection.update_many({'_id': {'$in': book_ids}}, {'$inc': {'inventory': -1 * bson.Int64(qty) for qty in book_qtys}})
 
 result = customerCollection.insert_many(customers)
